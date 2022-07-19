@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html>
+  <head>
+  <meta charset="UTF-8">
+  <title>NBA visualization</title>
+  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.js"></script> -->
+  <script src="https://d3js.org/d3.v3.min.js"></script>
+  <script src="https://d3js.org/d3.v4.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Lato:wght@700&display=swap" rel="stylesheet">
+  <style>
+    *{
+        -webkit-user-select:none;
+        -moz-user-select:none;
+        -o-user-select:none;
+        user-select:none;
+        margin: 0;
+        
+    }
+    .button {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 5px 25px;
+      text-align: center;
+      font-size: 16px;
+      font-weight: bold;
+      margin: 5px 5px;
+      border-radius: 5%;
+    }
+    .first{
+        margin-left:50px;
+    }
+    .bubbles {
+        position: fixed;
+        stroke-width: 2px;
+        stroke: white;
+    }
+    .bubbles:hover {
+        position: fixed;
+        stroke: black;
+    }
+    
+    nav{
+        background-color: #F5F7F7;
+        width: 100%;
+    }
+    nav h1{
+        font-family: 'Anton', sans-serif;
+        letter-spacing: 3px;
+        font-size: 60px;
+        margin-left: 10px;
+        display: inline-block;
+    }
+    p{
+        font-family: 'Anton', sans-serif;
+        letter-spacing: 1px;
+        font-size: 20px;
+        margin: 10px;
+        top: 100px
+    }
+  </style>
+  </head>
+  <body>
+    <nav>
+        <h1>NO BOYZ ALLOWED</h1>
+    </nav>
+
+    <div id="body">
+        <p>
+            It's NBA visualization about each team's ability to win the score,<br>
+            also it contains some scoring rate and salary comparison to analyze players.
+        </p>
+	    <div id="chart" style="float: left;"></div>
+    </div>
+    
+    <div style="float: left;">
+    <div>
+        <button class="first button" onclick="update('USG')">USG%</button>
+        <button class="button" onclick="update('PPP')">3P%</button>
+        <button class="button" onclick="update('PP')">2P%</button>
+        <div id="table" ></div>
+    </div>
+    <div style="float:left">
+        <button class='first button' id='btn1'>Pos</button>
+        <button class='button' id='btn2'>Tm</button>
+        <div id="bubbleChart"></div>
+    </div>
+    <div>        
+        <h4>Team member: 陳沛琪 賴姵媗</h4>
+    </div>
+<script type="text/javascript">
+
+// ===============================================================================================
+// ===========================================guide_pic===========================================
+// ===============================================================================================
+
+    function groupBy(data, keyGetter) {
+        const map = new Map();
+        const arr = new Array();
+        data.forEach((item) => {
+            const key = keyGetter(item);
+            const collection = map.get(key);
+            if (!collection) {
+                map.set(key, [item]);
+            } else {
+                collection.push(item);
+            }
+            if(!arr.includes(key)){
+                arr.push(key);
+            }
+        });
+        return {first:map, second:arr};
+    }
+    var ob = new Object();
+    let allAxis = new Array();
+    d3.csv("my_data.csv", function(data) {
+        var func = groupBy(data, data => data.Tm);
+        ob = func.first;
+        allAxis = func.second;
+        allAxis.forEach((item) => {
+            // console.log("grouped", ob.get(item));
+        });
+        RadarChart.draw("#chart", ob);
+    });
+    
+
+// ===============guide function start==============
+    var Team, now_player, now_color, selectedVar_;
+    var cfg = {
+        radius: 8, // 資料圓心大小
+        w: 600,
+        h: 600,
+        factor: 1,
+        factorLegend: 1,
+        maxValue: 46000000,//這些資料最大值設定
+        // maxValue: 0.6,//這些資料最大值設定
+        radians: 2 * Math.PI,
+        opacityArea: 0.2, // 透明度
+        ToRight: 5,
+        TranslateX: 150,
+        TranslateY: 100,
+        ExtraWidthX: 300,
+        ExtraWidthY: 150,
+        color: d3.scale.category20b(),
+        levels: 5, // 座標軸層數
+
+    };
+    var RadarChart = {
+        draw: function(id, d){
+            var total = allAxis.length; // 總共的軸數
+            var radius = cfg.factor*Math.min(cfg.w/2, cfg.h/2); // 座標圓的大小
+            // var Format = d3.format('%');
+            d3.select(id).select("svg").remove();
+
+            var g = d3.select(id) // 定位
+                .append("svg")
+                .attr("width", cfg.w+cfg.ExtraWidthX)
+                .attr("height", cfg.h+cfg.ExtraWidthY)
+                .append("g")
+                .attr("transform", "translate(" + cfg.TranslateX + "," + cfg.TranslateY + ")");
+                
+
+            var tooltip;
+            
+            //網狀線
+            for(var j=0; j<cfg.levels; j++){ // 有自行更動+1
+                var levelFactor = cfg.factor*radius*((j+1)/cfg.levels);
+                g.selectAll(".levels")
+                .data(allAxis)
+                .enter()
+                .append("svg:line")
+                .attr("x1", function(d, i){return levelFactor*(1-cfg.factor*Math.sin(i*cfg.radians/total));})
+                .attr("y1", function(d, i){return levelFactor*(1-cfg.factor*Math.cos(i*cfg.radians/total));})
+                .attr("x2", function(d, i){return levelFactor*(1-cfg.factor*Math.sin((i+1)*cfg.radians/total));})
+                .attr("y2", function(d, i){return levelFactor*(1-cfg.factor*Math.cos((i+1)*cfg.radians/total));})
+                .attr("class", "line")
+                .style("stroke", "lightgrey")
+                .attr("transform", "translate(" + (cfg.w/2-levelFactor) + ", " + (cfg.h/2-levelFactor) + ")");
+            }
+            
+            series = 0;
+
+            var axis = g.selectAll(".axis") 
+                .data(allAxis)
+                .enter()
+                .append("g")
+                .attr("class", "axis");
+
+            axis.append("line")  // 縱軸
+                .attr("x1", cfg.w/2)
+                .attr("y1", cfg.h/2)
+                .attr("x2", function(d, i){return cfg.w/2*(1-cfg.factor*Math.sin(i*cfg.radians/total));})
+                .attr("y2", function(d, i){return cfg.h/2*(1-cfg.factor*Math.cos(i*cfg.radians/total));})
+                .attr("class", "line")
+                .style("stroke", "lightgray")
+                .style("stroke-width", "1px");
+
+            axis.append("text") //各種類名稱屬性設定
+                .attr("class", "legend")
+                .text(function(d){return d})
+                .style("font-family", "sans-serif")
+                .style("font-size", "12px")
+                .attr("text-anchor", "middle")
+                .attr("dy", "1.5em")
+                .attr("transform", function(d, i){return "translate(0, -10)"})
+                .attr("x", function(d, i){return cfg.w/2*(1-cfg.factorLegend*Math.sin(i*cfg.radians/total))-60*Math.sin(i*cfg.radians/total);})
+                .attr("y", function(d, i){return cfg.h/2*(1-Math.cos(i*cfg.radians/total))-20*Math.cos(i*cfg.radians/total);});
+
+        
+            d.forEach(function(y, x){
+                dataValues = [];
+                g.selectAll(".nodes")
+                    .data(y, function(j, i){
+                        var isMatch= (element) => element == j.Tm;
+                        // console.log(allAxis.findIndex(isMatch));
+                        var cate = allAxis.findIndex(isMatch);  //Index:0~29
+                        dataValues.push([
+                            cfg.w/2*(1-(parseInt(Math.max(j.salary))/cfg.maxValue)*Math.sin(cate*cfg.radians/total)), 
+                            cfg.h/2*(1-(parseInt(Math.max(j.salary))/cfg.maxValue)*Math.cos(cate*cfg.radians/total))
+                        ]);
+                    });
+                    // console.log(dataValues)
+                    dataValues.push(dataValues[0]);
+                
+                g.selectAll(".area")
+                    .data([dataValues])
+                    .enter()
+                    .append("polygon")
+                    .attr("class", "radar-chart-serie"+series) 
+                    .style("stroke-width", "16px")
+                    .style("stroke-opacity", ".2")
+                    .style("stroke", cfg.color(series))
+                    .attr("points",function(d) {
+                        var str="";
+                        for(var pti=0;pti<d.length;pti++){
+                            str=str+d[pti][0]+","+d[pti][1]+" ";
+                        }
+                        return str;
+                    })
+                    .on('mouseover', function (d){
+                        // now_player=0
+                        // wh=1
+                        d3.select(this)
+                            .style("stroke-opacity", ".7")
+                        z = "polygon."+d3.select(this).attr("class");
+                        g.selectAll("polygon")
+                            .transition(200)
+                            .style("fill-opacity", 0.1); 
+                        g.selectAll(z)
+                            .transition(200)
+                            .style("fill-opacity", .4);
+                        var str = d3.select(this).attr('class')
+                        str= str.substring(17,19);
+                        console.log(allAxis[str]);
+                        // Team = 
+                        Team=allAxis[str]
+                        if(selectedVar_!=null)
+                            update(selectedVar_, Team=allAxis[str]);
+                        else    
+                            update(selectedVar, Team=allAxis[str]);
+                        //insert pop team below
+
+                        var Team_ = (element) => element == Team;
+                        now_color = (cfg.color(allAxis.findIndex(Team_)))
+
+                    })
+                    .on('mouseout', function(){
+                        // svg_loli.selectAll('circle').remove();
+                        d3.select(this)
+                            .style("stroke-opacity", ".2")
+                        g.selectAll("polygon")
+                        .transition(200)
+                        .style("fill-opacity", cfg.opacityArea);
+                    });
+                series++;
+            });
+            series=0;
+            d.forEach(function(y, x){
+                var isMatch, cate;
+                g.selectAll(".nodes")
+                    .data(y).enter()
+                    .append("svg:circle")
+                    .attr("class", "radar-chart-serie"+series)
+                    .attr('r', cfg.radius)
+                    .attr("alt", function(j){return Math.max(j.salary, 0)})
+                    .attr("cx", function(j, i){
+                        isMatch= (element) => element == j.Tm;
+                        cate = allAxis.findIndex(isMatch);
+                        dataValues.push([
+                            cfg.w/2*(1-(Math.max(j.salary)/cfg.maxValue)*Math.sin(cate*cfg.radians/total)), 
+                            cfg.h/2*(1-(Math.max(j.salary)/cfg.maxValue)*Math.cos(cate*cfg.radians/total))
+                        ]);
+                        return cfg.w/2*(1-(Math.max(j.salary, 0)/cfg.maxValue)*Math.sin(cate*cfg.radians/total));
+                    })
+                    .attr("cy", function(j, i){
+                        return cfg.h/2*(1-(Math.max(j.salary, 0)/cfg.maxValue)*Math.cos(cate*cfg.radians/total));
+                    })
+                    .attr("data-id", function(j){return j.Tm})
+                    .style("fill", cfg.color(series))
+                    .style("fill-opacity", 1)
+                    .style('stroke', 'white')
+                    .style('stroke-opacity', 1)
+                    .on('mouseover', function (d){ 
+                        wh=1;
+                        newX =  parseInt(d3.select(this).attr('cx')) ;
+                        newY =  parseInt(d3.select(this).attr('cy'));
+                        now_player = d.Name;
+                        console.log(now_player) //data.name
+                        d3.select(this)
+                            .attr('r', cfg.radius+2)
+                            .style('fill-opacity', 1)
+                            .style('stroke-width', '2px');
+                        tooltip
+                            .attr('x', newX-10)
+                            .attr('y', newY-10)
+                            .text(`${d.Tm} : ${d.Name}'s salary ${d.salary}`)
+                            .transition(100)
+                            .style('opacity', .9);
+                        z = "polygon."+d3.select(this).attr("class");
+                        g.selectAll("polygon")
+                            .transition(100)
+                            .style("fill-opacity", 0.1); 
+                        g.selectAll(z)
+                            .transition(100)
+                            .style("fill-opacity", 1);
+                        
+                            
+
+                        var str = d3.select(this).attr('class')
+                        str= str.substring(17,19);
+                        Team=allAxis[str]
+                        if(selectedVar_!=null)
+                            update(selectedVar_, Team=allAxis[str]);
+                        else    
+                            update(selectedVar, Team=allAxis[str]);
+                        
+                        var Team_ = (element) => element == Team;
+                        now_color = (cfg.color(allAxis.findIndex(Team_)));
+
+                         d3.selectAll("circle")
+                            .attr("stroke",e => {
+                                if(wh==0){
+                                    return 'none';
+                                }else{
+                                    // console.log(e.Player);
+                                    if(e.Player == now_player&&now_player!=undefined){
+                                        return 'black';
+                                    }else if(now_player==undefined){
+                                        return 'none';
+                                    }else{
+                                        return 'none';
+                                    }
+                                }
+                            })
+                            .attr("fill-opacity", e => {
+                                if(wh==0){
+                                    return '1';
+                                }else{
+                                    // console.log(e.Player);
+                                    if(e.Player == now_player&&now_player!=undefined){
+                                        return '1';
+                                    }
+                                    // else if(now_player==undefined){
+                                    //     return '1';
+                                    // }
+                                    else{
+                                        return '0.1';
+                                    }
+                                }
+                            })
+
+                        // svg.selectAll("dot")
+                        //     .enter()
+                        //     .selectAll("circle")
+                        // //     .merge(u)
+                        //     .attr("fill-opacity", 0)
+                        // }
+
+
+
+        //                 .enter()
+        // .append("circle")
+        //     .attr("class", function (d) { return "dot " + d.POS } )
+        //     .attr("cx", d => x_dot(+(d.USG)))
+        //     .attr("cy", d => y_dot(+(d.MIN))) 
+        //     .attr("r",5)
+        //     .style("fill", function (d) { return color_dot(d.POS) } )
+            // .attr("fill-opacity", e => {
+            //     if(wh==0){
+            //         return '1';
+            //     }else{
+            //      if(e.Player == now_player){
+            //         return '1';
+            //     }else{
+            //         return '0.2';
+            //     }}
+            // })
+        // .on("click", highlight1)
+        // .on("dblclick", doNotHighlight )  
+
+                    })
+                    .on('mouseout', function(){
+                        wh=0;
+                        svg_loli.selectAll("circle")
+                            .enter()
+                            .merge(u)
+                            .attr("opacity", 1)
+                        
+                        d3.select(this)
+                            .style("fill-opacity", 1)
+                            .attr('r', cfg.radius)
+                            .style('stroke-width', '1px');
+                        tooltip
+                            .transition(100)
+                            .style('opacity', 0);
+                        g.selectAll("polygon")
+                            .transition(100)
+                            .style("fill-opacity", cfg.opacityArea);
+                    })
+
+                series++;
+
+            });
+            //Tooltip
+            tooltip = g.append('text')
+                    .style('opacity', 0)
+                    .style('font-size', '13px');
+            for(var j=0; j<cfg.levels; j++){
+                var levelFactor = 1*radius*((j+1)/cfg.levels);
+                g.selectAll(".levels")
+                .data([1]) //dummy data
+                .enter() 
+                .append("svg:text") 
+                .attr("x", function(d){return levelFactor*(1-cfg.factor*Math.sin(0));}) // 座標軸的旋轉
+                .attr("y", function(d){return levelFactor*(1-cfg.factor*Math.cos(0));})
+                .attr("class", "legend")
+                .style("font-family", "sans-serif")
+                .style("font-size", "10px")
+                .attr("transform", "translate(" + (cfg.w/2-levelFactor + cfg.ToRight) + ", " + (cfg.h/2-levelFactor) + ")")  // 座標值的位置
+                .attr("fill", "#737373") //座標值的顏色
+                .text((j+1)*cfg.maxValue/cfg.levels); // 座標的值
+            }
+        }
+    };
+
+var wh;
+
+
+
+// ===============================================================================================
+// ===========================================dot_pic===========================================
+// ===============================================================================================
+  // set the dimensions and margins of the graph
+  const margin_dot ={top: 20, right: 20, bottom: 20, left: 40},
+      width_dot = 560 - margin_dot.left - margin_dot.right,
+      height_dot = 320 - margin_dot.top - margin_dot.bottom;
+
+// append the svg object to the body of the page
+  const svg = d3.select("#bubbleChart")
+    .append("svg")
+      .attr("width", width_dot + margin_dot.left + margin_dot.right)
+      .attr("height", height_dot + margin_dot.top + margin_dot.bottom)
+    .append("g")
+      .attr("transform", `translate(${margin_dot.left},${margin_dot.top})`)
+    
+  
+    
+    svg.append("rect")
+        .attr("x",0)
+        .attr("y",0)
+        .attr("height", height)
+        .attr("width", height)
+        .style("fill", "none")
+        .style("stroke", "black")
+        .style("opacity", 0.6)
+//Read the data
+
+  d3.csv("nba.csv", function(data) {
+    console.log(data);
+    // Add X axis
+    const x_dot = d3.scaleLinear()
+      .domain([d3.min(data.map(d => Number(d.MIN))),d3.max(data.map(d => Number(d.MIN)))])
+      .range([ 0, width_dot ]);
+    svg.append("g")
+      .attr("transform", `translate(0, ${height_dot})`)
+      .call(d3.axisBottom(x_dot).tickSize(-height*1.3).ticks(10))
+      .select(".domain").remove() //delete the boundary
+
+
+    // console.log([d3.min(data.map(d => Number(d.MIN))),d3.max(data.map(d => Number(d.MIN)))]);
+
+  // Add Y axis
+    const y_dot = d3.scaleLinear()
+      .domain([d3.min(data.map(d => +(d.USG))),d3.max(data.map(d => +(d.USG)))])
+      .range([ height_dot, 0])
+      .nice()
+    svg.append("g")
+      .call(d3.axisLeft(y_dot).tickSize(-width*1.3).ticks(7))
+      .select(".domain").remove()  //delete the boundary
+
+    svg.selectAll(".tick line").attr("stroke", "#EBEBEB")
+
+    svg.append("text")
+      .attr("text-anchor", "end")
+      .attr("transform", "rotate(-90)")
+      .attr("y", -margin.left + 13)
+      .attr("x", -margin.top - height/3 + 10)
+      .text("USG%")
+      .style("font-size","14px");
+
+
+
+    // Add a scale for scatter color
+    // POS = 
+    var color_dot = d3.scaleOrdinal()
+      .domain(["PG","C","SG","SF","PF","G","F"])
+      .range(["#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd","#bcbd22","#17becf"]);
+    // console.log(cfg.color)
+    var mycolor = d3.scaleOrdinal()
+        .domain(data.map(d=>d.Tm))
+        .range(
+            [cfg.color(0), cfg.color(1), cfg.color(2), cfg.color(3), cfg.color(4), cfg.color(5), 
+            cfg.color(6), cfg.color(7), cfg.color(8), cfg.color(9), cfg.color(10), cfg.color(11),
+            cfg.color(12), cfg.color(13), cfg.color(14), cfg.color(15), cfg.color(16), cfg.color(17),
+            cfg.color(18), cfg.color(19), cfg.color(20), cfg.color(21), cfg.color(22), cfg.color(23),
+            cfg.color(24), cfg.color(25), cfg.color(26), cfg.color(27), cfg.color(28), cfg.color(29)
+        ])
+
+    // data.map(d=>console.log(d))
+      
+    // Highlight the specie that is hovered
+    var highlight1 = function(d){
+        selected_specie = d.POS
+        // console.log(selected_specie)
+        d3.selectAll(".dot")
+            .transition()
+            .duration(200)
+            .style("fill-opacity", 0.1)
+            .attr("r", 5)
+        d3.selectAll("circle")
+            .attr("stroke",e => {
+                
+                    // console.log(e.Player);
+                    if(e.Player == now_player&&now_player!=undefined){
+                        return 'black';
+                    }else if(now_player==undefined){
+                        return 'none';
+                    }else{
+                        return 'none';
+                    }
+                }
+            )
+            .attr("fill-opacity", e => {
+            
+                    // console.log(e);
+                    if(e.POS == d.POS&&now_player!=undefined){
+                        return '1';
+                    }else if(e.POS == d.POS){
+                        return '1';
+                    }else{
+                        return '0.1';
+                    }
+                }
+            )
+
+        d3.selectAll("." + selected_specie)
+            .transition()
+            .duration(200)
+            .attr("fill-opacity", "1")
+            .style("fill", color_dot(selected_specie))
+            .attr("r", 5)
+    }
+    // Highlight the specie that is hovered
+    var doNotHighlight = function(){
+      d3.selectAll(".dot")
+        .transition()
+        .duration(200)
+        // .style("fill", "lightgrey")
+        .attr("fill-opacity", 1)
+        .attr("r", 5)
+    }
+  // Highlight the specie that is hovered
+    var highlight2 = function(d){
+        selected_specie = d.Tm
+        d3.selectAll(".dot")
+          .transition()
+          .duration(200)
+          .style("fill-opacity", 0.1)
+          .attr("r", 5)
+          d3.selectAll("circle")
+            .attr("stroke",e => {
+                    // console.log(e.Player);
+                    if(e.Player == now_player&&now_player!=undefined){
+                        return 'black';
+                    }else if(now_player==undefined){
+                        return 'none';
+                    }else{
+                        return 'none';
+                    }
+                }
+            )
+            .attr("fill-opacity", e => {
+                    // console.log(e.Player);
+                    if(e.Tm == d.Tm&&now_player!=undefined){
+                        return '1';
+                    }else if(e.Tm == d.Tm){
+                        return '1';
+                    }else{
+                        return '0.1';
+                    }
+                
+            })
+        d3.selectAll("." + selected_specie)
+          .transition()
+          .duration(200)
+          .style("fill", mycolor(selected_specie))
+          .attr("r", 5)
+      }
+
+
+
+
+    // -1- Create a tooltip div that is hidden by default:
+    const tooltip_dot = d3.select("#bubbleChart")
+      .append("div")
+        .style("opacity", 0)
+        .attr("class", "tooltip_dot")
+        .style("background-color", "black")
+        .style("border-radius", "5px")
+        .style("padding", "10px")
+        .style("margin", "10px 35px")
+        .style("color", "white")
+      // -2- Create 3 functions to show / update (when mouse move but stay on same circle) / hide the tooltip
+    const showTooltip = function(d) {
+            tooltip_dot
+            .transition()
+            .duration(200)
+            tooltip_dot
+            .style("opacity", 1)
+            .html("Player: " + d.Player + 
+            "</br>Team: " + d.Tm + "</br>Position: " + d.POS + "</br>USG%: " + d.USG +
+            "</br>MIN%: " + d.MIN )
+            .style("left", (d3.mouse(this)[0]+30) + "px")
+            .style("top", (d3.mouse(this)[1]+30) + "px")
+            // d3.selectAll("circle")
+            //     .attr("fill-opacity", e => {
+            //         console.log(wh)
+            //         if(wh==0){
+            //             return '1';
+            //         }else{
+            //             // console.log(e.Player);
+            //             if(e.Player == now_player&&now_player!=undefined){
+            //                 return '1';
+            //             }else if(now_player==undefined){
+            //                 return '1';
+            //             }else{
+            //                 return '0.1';
+            //             }
+            //         }
+            //     })
+    }
+    const moveTooltip = function(event, d) {
+        tooltip_dot
+            .style("left", (d3.mouse(this)[0]+30) + "px")
+            .style("top", (d3.mouse(this)[1]+30) + "px")
+    }
+    const hideTooltip = function(event, d) {
+        tooltip_dot
+          .transition()
+          .duration(200)
+          .style("opacity", 0)
+        svg.selectAll("dot")
+            .enter()
+            .append("circle")
+        // d3.scaleOrdinal()
+        //     .domain(["PG","C","SG","SF","PF","G","F"])
+        //     .range(["#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd","#bcbd22","#17becf"]);
+    }
+
+
+
+    // var color_dot = d3.scaleOrdinal()
+    //   .domain(["PG","C","SG","SF","PF","G","F"])
+    //   .range(["#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd","#bcbd22","#17becf"]);
+
+
+
+        
+    var btn_1 = document.getElementById("btn1");
+      btn_1.addEventListener("click", function(){
+        svg.append('g')
+        .selectAll("dot")
+        .data(data)
+        .enter()
+        .append("circle")
+            .attr("class", function (d) { return "dot " + d.POS } )
+            .attr("cx", d => x_dot(+(d.MIN)))
+            .attr("cy", d => y_dot(+(d.USG))) 
+            .attr("r",5)
+            .style("fill", function (d) { return color_dot(d.POS) } )
+        .on("click", highlight1)
+        .on("dblclick", doNotHighlight )  
+        .on("mouseover", showTooltip )
+        // .on("mousemove", moveTooltip )
+        .on("mouseleave", hideTooltip )
+    //   document.getElementById("text_Pos").innerHTML = "Choose a circle!";
+    //   document.getElementById("text_Tm").innerHTML = "";
+    
+    });
+    var btn_2 = document.getElementById("btn2");
+    btn_2.addEventListener("click", function(){
+        svg.append('g')
+        .selectAll("dot")
+        .data(data)
+        .enter()
+        .append("circle")
+            .attr("class", function (d) { return "dot " + d.Tm } )
+            .attr("cx", d => x_dot(+(d.MIN)))
+            .attr("cy", d => y_dot(+(d.USG))) 
+            .attr("r",5)
+            .style("fill", function (d) { return mycolor(d.Tm) } )
+        .on("click", highlight2)
+        .on("dblclick", doNotHighlight )  
+        .on("mouseover", showTooltip )
+        .on("mousemove", moveTooltip )
+        .on("mouseleave", hideTooltip )
+        // document.getElementById("text_Pos").innerHTML = "";
+        // document.getElementById("text_Tm").innerHTML = "Choose a circle to see whole team!";
+    });
+      //Add dots
+    svg.append('g')
+        .selectAll("dot")
+        .data(data)
+        .enter()
+        .append("circle")
+            .attr("class", function (d) { return "dot " + d.POS } )
+            .attr("cx", d => x_dot(+(d.MIN)))
+            .attr("cy", d => y_dot(+(d.USG))) 
+            .attr("r",5)
+            .style("fill", function (d) { return color_dot(d.POS) } )
+            // .attr("fill-opacity", e => {
+                // if(wh==0){
+                //     console.log("1");
+                //     return '1';
+                // }else{
+                //     console.log(e.player);
+                //     if(e.Player == now_player){
+                //         console.log("3");
+                //         return '1';
+                //     }else{
+                //         return '0.2';
+                //     }
+                // }
+            // })
+        .on("click", highlight1)
+        .on("dblclick", doNotHighlight )  
+        .on("mouseover", showTooltip )
+        .on("mousemove", moveTooltip )
+        .on("mouseleave", hideTooltip )
+        // .on("mouseover")
+
+  })
+
+
+
+
+// ===============================================================================================
+// ==========================================lolipop_pic==========================================
+// ===============================================================================================
+
+    var margin = {top: 20, right: 20, bottom: 100, left: 40},
+        width = 560 - margin.left - margin.right,
+        height = 400 - margin.top - margin.bottom;
+
+    var svg_loli = d3
+        .select('#table')
+        .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+            .attr("transform",
+                "translate(" + margin.left + "," + margin.top + ")");
+  // LollipopChart
+    var x = d3.scaleBand()
+        .range([ 0, width])
+        .padding(1)
+    svg_loli.append("g")
+        .attr("transform", `translate(0, ${height})`);
+          
+
+      // Initialize the Y axis
+    var y = d3.scaleLinear()
+        .range([ height, 0])
+    var yAxis = svg_loli.append("g")
+        .attr("class", "myYaxis")
+    var j;
+    var u;
+    function update(selectedVar) {
+        selectedVar_ = selectedVar;
+        var USG_m , PP_m, PPP_m;
+        d3.csv('nba.csv', function(data) {
+        var Group = []
+        USG_m = d3.max(data, function(d) { return +d['USG'] })
+        PPP_m = d3.max(data, function(d) { return +d['PPP'] })
+        PP_m = d3.max(data, function(d) { return +d['PP'] })
+        data.forEach(d => {
+          if (d.Tm == Team){
+            // console.log(Team) // correct
+            // console.log(d.USG)
+            d.USG = +(d.USG);
+            d.PP = +(d.PP);
+            d.PPP = +(d.PPP);
+            d.USG_m = +(USG_m);
+            d.PPP_m = +(PPP_m);
+            d.PP_m = +(PP_m);
+
+            Group.push(d)
+          }
+
+        })
+        // console.log(Group);
+
+        // X axis
+        x.domain(Group.map(d => d.Player ))
+        svg_loli.select("g")
+            .transition()
+            .duration(30)
+            .call(d3.axisBottom(x))
+            .selectAll("text")
+                .attr("transform", "translate(-10,1)rotate(-45)")
+                .style("text-anchor", "end");
+
+        // Add Y axis
+        y.domain([0, d3.max(Group, function(d) { return +d[selectedVar+"_m"] }) ])
+
+        yAxis.call(d3.axisLeft(y));
+
+        // variable u: map data to existing circle
+
+        // var j =0;
+        j = svg_loli.selectAll('.myLine').remove();
+
+        j = svg_loli.selectAll(".myLine")
+            .data(Group)
+            
+        j.enter()
+        .append("line")
+            .attr("class", "myLine")
+            .merge(j)
+            // .transition()
+            // .duration(30)
+            .attr("x1", function(d) { return x(d.Player); })
+            .attr("x2", function(d) { return x(d.Player); })
+            .attr("y1", y(0))
+            .attr("y2", function(d) { return y(d[selectedVar]); })
+            .attr("stroke", "grey")
+
+        // const hideTooltip = function(event, d) {
+        //     tooltip
+        //         .transition()
+        //         .duration(200)
+        //         .style("opacity", 0)
+        // }
+
+        // variable u: map data to existing circle
+        u = svg_loli.selectAll('circle').remove();
+        u = svg_loli.selectAll("circle")
+            .data(Group)
+            u.enter()
+            .append("circle")
+            .merge(u)
+            // .transition(30)
+            .attr("cx", function(d) { return x(d.Player); })
+            .attr("cy", function(d) { return y(d[selectedVar]); })
+            .attr("r", 8)
+            .attr("fill", now_color)
+            .attr("opacity", e => {
+                if(wh==0){
+                    return '1';
+                }else{
+                 if(e.Player == now_player){
+                    return '1';
+                }else{
+                    return '0.2';
+                }}
+            })
+            // .on("mouseleave", hideTooltip )
+      })
+    }
+  // Initialize plot
+    update('USG')
+
+
+</script> 
+</html>
